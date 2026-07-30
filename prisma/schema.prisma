@@ -1,0 +1,94 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite" // Ubah ke "mysql" atau "postgresql" jika kamu menggunakannya
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int       @id @default(autoincrement())
+  username     String    @unique
+  email        String?   @unique
+  passwordHash String
+  name         String
+  headline     String
+  bio          String    @default("Profil profesional baru.")
+  linkedin     String    @default("https://linkedin.com")
+  photoUrl     String    @default("https://images.unsplash.com/photo-1544723795-3fb6469f5b39?auto=format&fit=crop&w=800&q=80")
+  createdAt    DateTime  @default(now())
+
+  // Relasi
+  posts        Post[]
+  comments     Comment[]
+  likes        Like[]
+  reposts      Repost[]
+  
+  // Relasi Follow yang ditambahkan
+  followers    Follow[] @relation("UserFollowers")
+  following    Follow[] @relation("UserFollowing")
+}
+
+model Follow {
+  followerId  Int
+  followingId Int
+
+  follower    User @relation("UserFollowing", fields: [followerId], references: [id])
+  following   User @relation("UserFollowers", fields: [followingId], references: [id])
+
+  @@id([followerId, followingId])
+}
+
+model Post {
+  id         Int       @id @default(autoincrement())
+  title      String
+  slug       String    @unique
+  excerpt    String
+  content    String
+  coverImage String
+  category   String    @default("article")
+  published  Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+
+  authorId   Int
+  author     User      @relation(fields: [authorId], references: [id])
+
+  comments   Comment[]
+  likes      Like[]
+  reposts    Repost[]
+}
+
+model Comment {
+  id        Int      @id @default(autoincrement())
+  content   String
+  createdAt DateTime @default(now())
+
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  
+  postId    Int
+  post      Post     @relation(fields: [postId], references: [id])
+}
+
+model Like {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  
+  postId    Int
+  post      Post     @relation(fields: [postId], references: [id])
+
+  @@unique([postId, userId])
+}
+
+model Repost {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  
+  postId    Int
+  post      Post     @relation(fields: [postId], references: [id])
+
+  @@unique([postId, userId])
+}
