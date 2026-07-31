@@ -19,7 +19,7 @@ type PostWithCounts = {
   reposters: Reposter[];
 };
 
-export default function FeedCard({ post }: { post: PostWithCounts }) {
+export default function FeedCard({ post, isLoggedIn }: { post: PostWithCounts; isLoggedIn: boolean }) {
   const [likes, setLikes] = useState(post._count.likes);
   const [liked, setLiked] = useState(post.likedByMe);
   const [reposts, setReposts] = useState(post._count.reposts);
@@ -27,6 +27,9 @@ export default function FeedCard({ post }: { post: PostWithCounts }) {
   const [comments, setComments] = useState(post.comments);
   const [commentText, setCommentText] = useState('');
   const [commentsOpen, setCommentsOpen] = useState(false);
+  
+  // State untuk Modal Login
+  const [showLoginModal, setShowLoginModal] = useState(false);
 
   useEffect(() => {
     setLikes(post._count.likes);
@@ -37,6 +40,13 @@ export default function FeedCard({ post }: { post: PostWithCounts }) {
   }, [post]);
 
   async function handleAction(action: 'like' | 'repost' | 'comment', content?: string) {
+    // CEK LOGIN: Jika belum login, tampilkan modal dan hentikan proses
+    if (!isLoggedIn) {
+      setShowLoginModal(true);
+      return;
+    }
+
+    // 1. Optimistic UI (Update Instan)
     if (action === 'like') { setLiked(!liked); setLikes(liked ? likes - 1 : likes + 1); }
     if (action === 'repost') { setReposted(!reposted); setReposts(reposted ? reposts - 1 : reposts + 1); }
     if (action === 'comment') {
@@ -46,6 +56,7 @@ export default function FeedCard({ post }: { post: PostWithCounts }) {
         setCommentText('');
     }
 
+    // 2. Sync ke Server
     await fetch('/api/post-interactions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -69,7 +80,7 @@ export default function FeedCard({ post }: { post: PostWithCounts }) {
         background: '#fff', 
         maxWidth: '600px', 
         margin: '0 auto 32px auto',
-        boxShadow: '0 8px 30px rgba(0,0,0,0.06)' // Professional Shadow
+        boxShadow: '0 8px 30px rgba(0,0,0,0.06)'
       }}>
         
         {/* Header: Author Info */}
@@ -107,7 +118,6 @@ export default function FeedCard({ post }: { post: PostWithCounts }) {
                   </div>
                 ))}
                 
-                {/* Repost Badge Overlay */}
                 <div style={{ marginLeft: '8px', background: 'rgba(255,255,255,0.9)', padding: '4px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: '600', color: '#8b5cf6', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
                   🔄 Reposted
                 </div>
@@ -129,12 +139,41 @@ export default function FeedCard({ post }: { post: PostWithCounts }) {
           <button onClick={() => handleAction('repost')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: reposted ? '#8b5cf6' : '#525252', fontWeight: '500', transition: '0.2s' }}>
             {reposted ? '🔁' : '🔄'} Repost
           </button>
-          <button onClick={() => setCommentsOpen(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#525252', fontWeight: '500', transition: '0.2s' }}>💬 Komentar</button>
+          <button onClick={() => handleAction('comment')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#525252', fontWeight: '500', transition: '0.2s' }}>💬 Komentar</button>
         </div>
       </article>
 
-      {/* Modal Komentar */}
-      {commentsOpen && (
+      {/* LOGIN WALL MODAL */}
+      {showLoginModal && (
+        <div onClick={() => setShowLoginModal(false)} style={{ 
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', 
+          backdropFilter: 'blur(5px)', zIndex: 9999, 
+          display: 'flex', alignItems: 'center', justifyContent: 'center' 
+        }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ 
+            background: 'white', padding: '40px', borderRadius: '20px', 
+            textAlign: 'center', maxWidth: '400px', width: '90%' 
+          }}>
+            <h2 style={{ marginBottom: '15px' }}>Masuk untuk Melanjutkan</h2>
+            <p style={{ color: '#666', marginBottom: '25px' }}>Anda harus masuk ke akun ProFeed untuk menyukai, membalas, atau melakukan repost.</p>
+            
+            <div style={{ display: 'flex', gap: '10px', flexDirection: 'column' }}>
+              <a href="/login" style={{ 
+                background: '#000', color: '#fff', padding: '12px', 
+                borderRadius: '20px', textDecoration: 'none', fontWeight: 'bold' 
+              }}>Login Sekarang</a>
+              
+              <button onClick={() => setShowLoginModal(false)} style={{ 
+                background: 'transparent', border: 'none', cursor: 'pointer', 
+                color: '#888', marginTop: '10px', textDecoration: 'underline'
+              }}>Nanti saja</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Komentar (Hanya muncul jika sudah login) */}
+      {commentsOpen && isLoggedIn && (
         <div onClick={() => setCommentsOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div onClick={(e) => e.stopPropagation()} style={{ background: 'white', width: '90%', maxWidth: '500px', borderRadius: '20px', height: '70vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div style={{ padding: '20px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

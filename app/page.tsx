@@ -115,7 +115,11 @@ export default async function HomePage() {
         
         <div className="feed-list">
           {finalPosts.map((post) => (
-            <FeedCard key={post.id} post={post} />
+            <FeedCard 
+      key={post.id} 
+      post={post} 
+      isLoggedIn={isLoggedIn} 
+    />
           ))}
         </div>
       </section>
