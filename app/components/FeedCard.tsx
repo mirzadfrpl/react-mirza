@@ -1,168 +1,166 @@
 'use client';
 
-import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
-type Comment = {
-  id: number;
-  content: string;
-  createdAt: string | Date;
-  user: {
-    name: string;
-  };
-};
-
+type Comment = { id: number; content: string; user: { name: string; photoUrl?: string; }; };
+type Reposter = { name: string; username: string; photoUrl: string; };
 type PostWithCounts = {
   id: number;
   title: string;
-  slug: string;
   excerpt: string;
   coverImage: string;
   category: string;
-  createdAt: string | Date;
-  author: {
-    name: string;
-    username: string;
-    headline: string;
-    photoUrl: string;
-  };
+  createdAt: Date;
+  author: { name: string; username: string; photoUrl: string; };
   comments: Comment[];
-  _count: {
-    likes: number;
-    comments: number;
-    reposts: number;
-  };
-  likedByMe: boolean;
+  _count: { likes: number; comments: number; reposts: number; };
+  likedByMe?: boolean;
+  repostedByMe?: boolean;
+  reposters: Reposter[];
 };
 
-type Props = {
-  post: PostWithCounts;
-};
-
-export default function FeedCard({ post }: Props) {
+export default function FeedCard({ post }: { post: PostWithCounts }) {
   const [likes, setLikes] = useState(post._count.likes);
   const [liked, setLiked] = useState(post.likedByMe);
-  const [comments, setComments] = useState<Comment[]>(post.comments);
   const [reposts, setReposts] = useState(post._count.reposts);
+  const [reposted, setReposted] = useState(post.repostedByMe);
+  const [comments, setComments] = useState(post.comments);
   const [commentText, setCommentText] = useState('');
-  const [status, setStatus] = useState('');
-  const [loading, setLoading] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
 
-  async function handleAction(action: 'like' | 'comment' | 'repost') {
-    if (action === 'comment' && !commentText.trim()) {
-      setStatus('Tulis komentar terlebih dahulu.');
-      return;
-    }
-    setLoading(true);
-    setStatus('');
-    
-    const body: Record<string, unknown> = {
-      action,
-      postId: post.id,
-    };
+  useEffect(() => {
+    setLikes(post._count.likes);
+    setLiked(post.likedByMe);
+    setReposts(post._count.reposts);
+    setReposted(post.repostedByMe);
+    setComments(post.comments);
+  }, [post]);
+
+  async function handleAction(action: 'like' | 'repost' | 'comment', content?: string) {
+    if (action === 'like') { setLiked(!liked); setLikes(liked ? likes - 1 : likes + 1); }
+    if (action === 'repost') { setReposted(!reposted); setReposts(reposted ? reposts - 1 : reposts + 1); }
     if (action === 'comment') {
-      body.content = commentText.trim();
+        if (!content?.trim()) return;
+        const newComment = { id: Date.now(), content: content, user: { name: 'Anda' } };
+        setComments([newComment, ...comments]);
+        setCommentText('');
     }
-    
-    const response = await fetch('/api/post-interactions', {
+
+    await fetch('/api/post-interactions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ action, postId: post.id, content }),
     });
-    const data = await response.json();
-    setLoading(false);
-    
-    if (!response.ok) {
-      setStatus(data.error || 'Terjadi masalah saat berinteraksi.');
-      return;
-    }
-    
-    if (action === 'like') {
-      setLikes(data.count);
-      setLiked(Boolean(data.liked));
-      setStatus(data.liked ? 'Posting disukai.' : 'Like dihapus.');
-    } else if (action === 'repost') {
-      setReposts(data.count);
-      setStatus('Berhasil posting ulang.');
-    } else if (action === 'comment') {
-      if (typeof data.comment === 'object') {
-        setComments([data.comment as Comment, ...comments]);
-      }
-      setCommentText('');
-      setCommentsOpen(true);
-      setStatus('Komentar terkirim.');
-    }
   }
 
   return (
-    <article className="feed-card">
-      <div className="feed-summary">
-        <div className="post-head">
-          <div>
-            <Link className="author-name" href={`/linkidn/${post.author.username}`}>{post.author.name}</Link>
-            <p className="author-headline">{post.author.headline}</p>
+    <>
+      <style jsx global>{`
+        @keyframes float { 0% { transform: translateY(0px); } 50% { transform: translateY(-8px); } 100% { transform: translateY(0px); } }
+        .animate-float { animation: float 3s ease-in-out infinite; }
+      `}</style>
+
+      {/* Main Card Container */}
+      <article style={{ 
+        marginBottom: '32px', 
+        border: '1px solid #f0f0f0', 
+        borderRadius: '20px', 
+        padding: '24px', 
+        background: '#fff', 
+        maxWidth: '600px', 
+        margin: '0 auto 32px auto',
+        boxShadow: '0 8px 30px rgba(0,0,0,0.06)' // Professional Shadow
+      }}>
+        
+        {/* Header: Author Info */}
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '20px' }}>
+          <img src={post.author.photoUrl} style={{ width: '48px', height: '48px', borderRadius: '50%', objectFit: 'cover', border: '1px solid #eee' }} />
+          <div style={{ marginLeft: '14px' }}>
+             <span style={{ fontWeight: '700', fontSize: '1rem', color: '#1a1a1a', display: 'block' }}>{post.author.name}</span>
+             <span style={{ fontSize: '0.85rem', color: '#71717a' }}>@{post.author.username}</span>
           </div>
-          <span className="post-category">{post.category}</span>
         </div>
-        <div className="feed-preview">
-          <h3>{post.title}</h3>
-          <p>{post.excerpt}</p>
-          {post.coverImage ? (
-            <img className="feed-card-image" src={post.coverImage} alt={post.title} />
-          ) : null}
-        </div>
-        <div className="feed-meta">
-          <time dateTime={String(post.createdAt)}>{new Date(post.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</time>
-          <span>{likes} like • {comments.length} komentar • {reposts} repost</span>
-        </div>
-        <div className="feed-actions">
-          <button
-            className={`reaction-button like-button ${liked ? 'liked' : ''}`}
-            type="button"
-            onClick={() => handleAction('like')}
-            disabled={loading}
-          >
-            <span className="heart-icon">{liked ? '♥' : '♡'}</span>
-            {liked ? 'Liked' : 'Like'}
-          </button>
-          <button className="reaction-button secondary" type="button" onClick={() => handleAction('repost')} disabled={loading}>Repost</button>
-          <button className="reaction-button secondary" type="button" onClick={() => setCommentsOpen(!commentsOpen)}>{commentsOpen ? 'Tutup' : 'Komentar'}</button>
-          <Link className="button tertiary small" style={{ marginLeft: 'auto' }} href={`/blog/${post.slug}`}>Baca</Link>
-        </div>
-      </div>
-      
-      {commentsOpen ? (
-        <aside className="feed-comment-column">
-          <div className="comments-header">
-            <h4>Komentar</h4>
-            <p>{comments.length} terbaru</p>
-          </div>
-          <div className="comment-list">
-            {comments.length ? (
-              comments.map((comment) => (
-                <div key={comment.id} className="comment-item">
-                  <strong>{comment.user.name}</strong>
-                  <p>{comment.content}</p>
-                  <small>{new Date(comment.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</small>
+
+        {/* Content */}
+        <h3 style={{ fontSize: '1.25rem', marginBottom: '12px', fontWeight: '600', color: '#111' }}>{post.title}</h3>
+        <p style={{ color: '#4a4a4a', marginBottom: '20px', lineHeight: '1.6' }}>{post.excerpt}</p>
+
+        {/* Cover Image + Stacked Avatars */}
+        {post.coverImage && (
+          <div style={{ position: 'relative', width: '100%', marginBottom: '20px' }}>
+            <img src={post.coverImage} style={{ width: '100%', borderRadius: '16px', minHeight: '300px', objectFit: 'cover' }} />
+            
+            {/* Stacked Reposter Avatars */}
+            {post.reposters.length > 0 && (
+              <div className="animate-float" style={{ position: 'absolute', bottom: '20px', left: '20px', display: 'flex', alignItems: 'center' }}>
+                {post.reposters.slice(0, 3).map((r, i) => (
+                  <div key={i} style={{ 
+                    marginLeft: i > 0 ? '-15px' : '0px', 
+                    zIndex: 10 - i,
+                    width: '44px',
+                    height: '44px',
+                    borderRadius: '50%',
+                    border: '3px solid #fff',
+                    overflow: 'hidden'
+                  }}>
+                    <img src={r.photoUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  </div>
+                ))}
+                
+                {/* Repost Badge Overlay */}
+                <div style={{ marginLeft: '8px', background: 'rgba(255,255,255,0.9)', padding: '4px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: '600', color: '#8b5cf6', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+                  🔄 Reposted
                 </div>
-              ))
-            ) : (
-              <p className="comment-empty">Belum ada komentar. Jadilah yang pertama menulis.</p>
+              </div>
             )}
           </div>
-          <div className="comment-form">
-            <input
-              value={commentText}
-              onChange={(event) => setCommentText(event.target.value)}
-              placeholder="Tambahkan komentar..."
-              disabled={loading}
-            />
-            <button className="reaction-button ghost" type="button" onClick={() => handleAction('comment')} disabled={loading}>Kirim</button>
+        )}
+
+        {/* Stats */}
+        <div style={{ marginTop: '16px', fontSize: '0.9rem', color: '#525252', paddingBottom: '16px', borderBottom: '1px solid #f4f4f4' }}>
+           <span style={{ fontWeight: '600', color: '#000' }}>{likes}</span> Likes • <span style={{ fontWeight: '600', color: '#000' }}>{comments.length}</span> Komentar • <span style={{ fontWeight: '600', color: '#000' }}>{reposts}</span> Repost
+        </div>
+
+        {/* Action Buttons */}
+        <div style={{ display: 'flex', gap: '32px', marginTop: '16px' }}>
+          <button onClick={() => handleAction('like')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: liked ? '#e11d48' : '#525252', fontWeight: '500', transition: '0.2s' }}>
+            {liked ? '❤️' : '♡'} Like
+          </button>
+          <button onClick={() => handleAction('repost')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: reposted ? '#8b5cf6' : '#525252', fontWeight: '500', transition: '0.2s' }}>
+            {reposted ? '🔁' : '🔄'} Repost
+          </button>
+          <button onClick={() => setCommentsOpen(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#525252', fontWeight: '500', transition: '0.2s' }}>💬 Komentar</button>
+        </div>
+      </article>
+
+      {/* Modal Komentar */}
+      {commentsOpen && (
+        <div onClick={() => setCommentsOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: 'white', width: '90%', maxWidth: '500px', borderRadius: '20px', height: '70vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={{ padding: '20px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0, fontSize: '1.1rem' }}>Komentar</h3>
+              <button onClick={() => setCommentsOpen(false)} style={{ border: 'none', background: '#f5f5f5', borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer' }}>✕</button>
+            </div>
+            
+            <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
+              {comments.map((c, i) => (
+                <div key={i} style={{ marginBottom: '20px', display: 'flex', gap: '12px' }}>
+                  <img src={c.user.photoUrl || '/default-avatar.png'} style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover' }} />
+                  <div style={{ background: '#f4f4f4', padding: '10px 14px', borderRadius: '16px' }}>
+                    <div style={{ fontWeight: 'bold', fontSize: '0.85rem' }}>{c.user.name}</div>
+                    <div style={{ fontSize: '0.95rem' }}>{c.content}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ padding: '20px', borderTop: '1px solid #eee', display: 'flex', gap: '10px', background: '#fff' }}>
+              <input value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder="Tulis komentar..." style={{ flex: 1, padding: '12px 16px', borderRadius: '24px', border: '1px solid #e5e7eb', outline: 'none' }} />
+              <button onClick={() => handleAction('comment', commentText)} style={{ padding: '0 24px', background: '#000', color: '#fff', borderRadius: '24px', border: 'none', cursor: 'pointer', fontWeight: '600' }}>Kirim</button>
+            </div>
           </div>
-          {status ? <p className="comment-instruction">{status}</p> : null}
-        </aside>
-      ) : null}
-    </article>
+        </div>
+      )}
+    </>
   );
 }

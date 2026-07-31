@@ -1,15 +1,29 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import AutoRefresh from './components/AutoRefresh';
 
 export const metadata: Metadata = {
-  title: 'Profil Eksklusif',
-  description: 'Personal blog dan dashboard Next.js dengan database SQLite.',
+  title: 'ProFeed | Jaringan Profesional',
+  description: 'Platform interaksi profesional dengan update real-time.',
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="id">
-      <body>{children}</body>
+      <body>
+        {/* 
+           AutoRefresh akan memicu router.refresh() setiap 3 detik.
+           Ini memastikan data feed, likes, dan reposts selalu sinkron
+           dengan server tanpa harus reload halaman.
+        */}
+        <AutoRefresh interval={3000} />
+        
+        {children}
+      </body>
     </html>
   );
 }

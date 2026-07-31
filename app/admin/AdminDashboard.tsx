@@ -45,6 +45,20 @@ export default function AdminDashboard() {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
 
+  // --- Styles Constants ---
+  // Font akan otomatis mengikuti globals.css karena tidak lagi didefinisikan secara eksplisit di sini
+  const style = {
+    container: { maxWidth: '1000px', margin: '0 auto', padding: '0 20px' },
+    header: { padding: '40px 0', borderBottom: '1px solid #eee', marginBottom: '40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+    grid: { display: 'grid', gridTemplateColumns: '250px 1fr', gap: '60px' },
+    nav: { display: 'flex', flexDirection: 'column' as const, gap: '15px', position: 'sticky' as const, top: '40px' },
+    section: { marginBottom: '60px' },
+    card: { border: '1px solid #eee', padding: '30px', borderRadius: '8px', backgroundColor: '#fff' },
+    input: { width: '100%', padding: '12px', border: '1px solid #ddd', borderRadius: '4px', marginBottom: '20px', fontSize: '16px' },
+    button: { padding: '10px 20px', borderRadius: '20px', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '14px', transition: '0.2s' },
+    avatar: { width: '80px', height: '80px', borderRadius: '50%', objectFit: 'cover' as const, border: '1px solid #eee' }
+  };
+
   useEffect(() => {
     async function loadData() {
       const [userRes, postsRes] = await Promise.all([
@@ -52,268 +66,151 @@ export default function AdminDashboard() {
         fetch('/api/posts?own=true'),
       ]);
 
-      if (!userRes.ok) {
-        router.push('/login');
-        return;
-      }
-
+      if (!userRes.ok) { router.push('/login'); return; }
       const userData = await userRes.json();
-      if (!userData?.user) {
-        router.push('/login');
-        return;
-      }
+      if (!userData?.user) { router.push('/login'); return; }
 
       setUser(userData.user);
-
-      if (!postsRes.ok) {
-        setPosts([]);
-      } else {
-        const postsData = await postsRes.json();
-        setPosts(postsData);
-      }
-
+      if (!postsRes.ok) { setPosts([]); } else { const postsData = await postsRes.json(); setPosts(postsData); }
       setLoading(false);
     }
-
     loadData();
   }, [router]);
 
   const saveProfile = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!user) return;
-
-    const res = await fetch('/api/auth/profile', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(user),
-    });
-
+    const res = await fetch('/api/auth/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(user) });
     const data = await res.json();
-    if (res.ok) {
-      setUser(data);
-      setMessage('Profil berhasil diperbarui.');
-    } else {
-      setMessage(data.error || 'Terjadi kesalahan saat memperbarui profil.');
-    }
+    if (res.ok) { setUser(data); setMessage('Profil diperbarui.'); setTimeout(() => setMessage(''), 3000); }
+    else { setMessage(data.error || 'Gagal.'); }
   };
 
   const savePost = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const method = isEditing ? 'PATCH' : 'POST';
     const body = isEditing ? { ...form, id: form.id } : form;
-
-    const res = await fetch('/api/posts', {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    const res = await fetch('/api/posts', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const data = await res.json();
-
     if (res.ok) {
-      if (isEditing) {
-        setPosts(posts.map((post) => (post.id === data.id ? data : post)));
-      } else {
-        setPosts([data, ...posts]);
-      }
-      setForm(emptyPost);
-      setIsEditing(false);
-      setMessage('Posting berhasil disimpan.');
-    } else {
-      setMessage(data.error || 'Gagal menyimpan posting.');
-    }
+      if (isEditing) { setPosts(posts.map((post) => (post.id === data.id ? data : post))); }
+      else { setPosts([data, ...posts]); }
+      setForm(emptyPost); setIsEditing(false); setMessage('Postingan disimpan.'); setTimeout(() => setMessage(''), 3000);
+    } else { setMessage(data.error || 'Gagal.'); }
   };
 
-  const editPost = (post: PostData) => {
-    setForm(post);
-    setIsEditing(true);
-    setMessage('');
-  };
-
+  const editPost = (post: PostData) => { setForm(post); setIsEditing(true); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const deletePost = async (postId: number) => {
-    const res = await fetch('/api/posts', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: postId }),
-    });
-    const data = await res.json();
-    if (res.ok) {
-      setPosts(posts.filter((post) => post.id !== postId));
-      setMessage('Posting berhasil dihapus.');
-    } else {
-      setMessage(data.error || 'Gagal menghapus posting.');
-    }
+    const res = await fetch('/api/posts', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: postId }) });
+    if (res.ok) { setPosts(posts.filter((post) => post.id !== postId)); setMessage('Postingan dihapus.'); }
   };
 
-  const logout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
-    router.push('/login');
-  };
+  const logout = async () => { await fetch('/api/auth/logout', { method: 'POST' }); router.push('/login'); };
 
-  if (loading) {
-    return <main className="page"><p>Memuat dashboard…</p></main>;
-  }
-
-  const publishedCount = posts.filter((post) => post.published).length;
-  const draftCount = posts.length - publishedCount;
+  if (loading) return <main style={{ padding: '50px', textAlign: 'center' }}>Memuat dashboard…</main>;
 
   return (
-    <main className="page dashboard-page">
-      <header className="page-header page-header-admin">
+    <main style={style.container}>
+      <header style={style.header}>
         <div>
-          <p className="eyebrow">Dashboard Admin</p>
-          <h1>{user?.name || 'Profil Anda'}</h1>
-          <div className="dashboard-stats">
-            <span><strong>{posts.length}</strong> total posting</span>
-            <span><strong>{publishedCount}</strong> terbit</span>
-            <span><strong>{draftCount}</strong> draf</span>
-          </div>
+          <p style={{ color: '#888', textTransform: 'uppercase', letterSpacing: '1px', fontSize: '12px' }}>Dashboard Admin</p>
+          <h1 style={{ fontSize: '32px', margin: '5px 0' }}>{user?.name}</h1>
         </div>
-        <div className="header-actions">
-          <button className="button tertiary" type="button" onClick={logout}>Keluar</button>
-          <Link className="button" href={`/linkidn/${user?.username || ''}`}>Lihat profil</Link>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button style={{ ...style.button, backgroundColor: '#f0f0f0' }} onClick={logout}>Keluar</button>
+          <Link style={{ ...style.button, backgroundColor: '#000', color: '#fff' }} href={`/linkidn/${user?.username || ''}`}>Lihat Profil</Link>
         </div>
       </header>
 
-      {message && <div className="dashboard-toast">{message}</div>}
+      {message && <div style={{ padding: '15px', backgroundColor: '#e8f5e9', color: '#2e7d32', marginBottom: '20px', borderRadius: '4px' }}>{message}</div>}
 
-      <div className="dashboard-shell">
-        <nav className="dashboard-nav">
-          <a className="nav-item" href="#profil">Profil publik</a>
-          <a className="nav-item" href="#postingan-baru">{isEditing ? 'Edit postingan' : 'Tulis baru'}</a>
-          <a className="nav-item" href="#postingan-saya">Postingan saya</a>
+      <div style={style.grid}>
+        <nav style={style.nav}>
+          <a href="#profil" style={{ textDecoration: 'none', color: '#000', fontWeight: 600 }}>Profil Publik</a>
+          <a href="#postingan-baru" style={{ textDecoration: 'none', color: '#666' }}>{isEditing ? 'Edit Postingan' : 'Tulis Baru'}</a>
+          <a href="#postingan-saya" style={{ textDecoration: 'none', color: '#666' }}>Postingan Saya</a>
         </nav>
 
-        <div className="dashboard-main">
-          <section id="profil" className="profile-card admin-profile-card">
-            <div className="profile-photo profile-photo-large">
-              <img src={user?.photoUrl} alt={user?.name} />
-            </div>
-            <div className="profile-info">
-              <p className="eyebrow">@{user?.username}</p>
-              <h2>{user?.name}</h2>
-              <p className="lead">{user?.headline}</p>
-              <p>{user?.bio}</p>
-              <div className="hero-actions profile-actions">
-                <Link className="button tertiary small" href={user?.linkedin || '#'} target="_blank" rel="noreferrer">LinkedIn</Link>
+        <div>
+          <section id="profil" style={style.section}>
+            <h2 style={{ fontSize: '20px', marginBottom: '20px' }}>Edit Profil</h2>
+            <div style={style.card}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '30px' }}>
+                <img src={user?.photoUrl || '/avatar.png'} alt="Profil" style={style.avatar} />
+                <div>
+                   <h3 style={{ margin: 0 }}>{user?.name}</h3>
+                   <p style={{ color: '#666', fontSize: '14px' }}>@{user?.username}</p>
+                </div>
               </div>
+              <form onSubmit={saveProfile}>
+                <label>Nama Lengkap</label>
+                <input style={style.input} value={user?.name ?? ''} onChange={(e) => setUser(user ? { ...user, name: e.target.value } : null)} required />
+                <label>Headline</label>
+                <input style={style.input} value={user?.headline ?? ''} onChange={(e) => setUser(user ? { ...user, headline: e.target.value } : null)} required />
+                <label>Tentang Saya</label>
+                <textarea style={{ ...style.input, height: '100px' }} value={user?.bio ?? ''} onChange={(e) => setUser(user ? { ...user, bio: e.target.value } : null)} />
+                <label>LinkedIn URL</label>
+                <input style={style.input} value={user?.linkedin ?? ''} onChange={(e) => setUser(user ? { ...user, linkedin: e.target.value } : null)} />
+                <label>Foto Profil (URL)</label>
+                <input style={style.input} value={user?.photoUrl ?? ''} onChange={(e) => setUser(user ? { ...user, photoUrl: e.target.value } : null)} />
+                <button style={{ ...style.button, backgroundColor: '#000', color: '#fff' }} type="submit">Simpan Profil</button>
+              </form>
             </div>
           </section>
 
-          <section className="editor-panel admin-section">
-            <p className="card-tag">Pengaturan</p>
-            <h2>Edit profil</h2>
-            <form className="form-card" onSubmit={saveProfile}>
-              <label>
-                Nama lengkap
-                <input value={user?.name ?? ''} onChange={(event) => setUser(user ? { ...user, name: event.target.value } : null)} required />
-              </label>
-              <label>
-                Headline profesional
-                <input value={user?.headline ?? ''} onChange={(event) => setUser(user ? { ...user, headline: event.target.value } : null)} required />
-              </label>
-              <label>
-                Tentang saya
-                <textarea value={user?.bio ?? ''} onChange={(event) => setUser(user ? { ...user, bio: event.target.value } : null)} />
-              </label>
-              <label>
-                LinkedIn
-                <input value={user?.linkedin ?? ''} onChange={(event) => setUser(user ? { ...user, linkedin: event.target.value } : null)} />
-              </label>
-              <label>
-                Foto profil URL
-                <input value={user?.photoUrl ?? ''} onChange={(event) => setUser(user ? { ...user, photoUrl: event.target.value } : null)} />
-              </label>
-              <div className="form-actions">
-                <button className="form-button" type="submit">Simpan profil</button>
-              </div>
-            </form>
-          </section>
-
-          <section id="postingan-baru" className="editor-panel admin-section">
-            <p className="card-tag">{isEditing ? 'Sedang mengedit' : 'Cerita baru'}</p>
-            <h2>{isEditing ? 'Edit postingan' : 'Tambah postingan baru'}</h2>
-            <form className="form-card" onSubmit={savePost}>
-              <label>
-                Judul
-                <input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} required />
-              </label>
-              <label>
-                Slug (URL)
-                <input value={form.slug} onChange={(event) => setForm({ ...form, slug: event.target.value })} required />
-              </label>
-              <label>
-                Ringkasan
-                <textarea value={form.excerpt} onChange={(event) => setForm({ ...form, excerpt: event.target.value })} required />
-              </label>
-              <label>
-                Konten
-                <textarea value={form.content} onChange={(event) => setForm({ ...form, content: event.target.value })} required />
-              </label>
-              <label>
-                Gambar sampul URL
-                <input value={form.coverImage} onChange={(event) => setForm({ ...form, coverImage: event.target.value })} required />
-              </label>
-              <label>
-                Jenis posting
-                <select value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })}>
+          <section id="postingan-baru" style={style.section}>
+            <h2 style={{ fontSize: '20px', marginBottom: '20px' }}>{isEditing ? 'Edit Postingan' : 'Tambah Postingan Baru'}</h2>
+            <div style={style.card}>
+              <form onSubmit={savePost}>
+                <label>Judul</label>
+                <input style={style.input} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
+                <label>Slug (URL)</label>
+                <input style={style.input} value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} required />
+                <label>Ringkasan</label>
+                <textarea style={{ ...style.input, height: '80px' }} value={form.excerpt} onChange={(e) => setForm({ ...form, excerpt: e.target.value })} required />
+                <label>Konten</label>
+                <textarea style={{ ...style.input, height: '200px' }} value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} required />
+                <label>Gambar Sampul (URL)</label>
+                <input style={style.input} value={form.coverImage} onChange={(e) => setForm({ ...form, coverImage: e.target.value })} required />
+                <label>Jenis Posting</label>
+                <select style={style.input} value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
                   <option value="article">Artikel</option>
                   <option value="certificate">Sertifikat</option>
                   <option value="activity">Kegiatan</option>
                   <option value="experience">Pengalaman</option>
                 </select>
-              </label>
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={form.published}
-                  onChange={(event) => setForm({ ...form, published: event.target.checked })}
-                />
-                <span>Terbitkan langsung</span>
-              </label>
-              <div className="form-actions">
-                <button className="form-button" type="submit">Simpan posting</button>
-                <button
-                  className="form-button secondary"
-                  type="button"
-                  onClick={() => {
-                    setForm(emptyPost);
-                    setIsEditing(false);
-                  }}
-                >
-                  Batal
-                </button>
-              </div>
-            </form>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+                  <input type="checkbox" checked={form.published} onChange={(e) => setForm({ ...form, published: e.target.checked })} />
+                  Terbitkan Sekarang
+                </label>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button style={{ ...style.button, backgroundColor: '#000', color: '#fff' }} type="submit">Simpan</button>
+                  <button style={{ ...style.button, backgroundColor: '#f0f0f0' }} type="button" onClick={() => { setForm(emptyPost); setIsEditing(false); }}>Batal</button>
+                </div>
+              </form>
+            </div>
           </section>
 
-          <section id="postingan-saya" className="editor-panel admin-section">
-            <p className="card-tag">Arsip</p>
-            <h2>Postingan saya</h2>
-            {posts.length ? (
-              <div className="post-grid">
-                {posts.map((post) => (
-                  <article key={post.id} className="post-card">
-                    <div className="post-head">
-                      <span className="post-category">{post.category}</span>
-                      {!post.published && <span className="post-draft-badge">Draf</span>}
-                    </div>
-                    <h3>{post.title}</h3>
-                    <p>{post.excerpt}</p>
-                    <div className="post-actions">
-                      <button type="button" className="button tertiary small" onClick={() => editPost(post)}>Edit</button>
-                      <button type="button" className="button danger small" onClick={() => deletePost(post.id)}>Hapus</button>
-                    </div>
-                  </article>
-                ))}
+          <section id="postingan-saya" style={style.section}>
+            <h2 style={{ fontSize: '20px', marginBottom: '20px' }}>Postingan Saya ({posts.length})</h2>
+            {posts.map((post) => (
+              <div key={post.id} style={{ ...style.card, marginBottom: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <h3 style={{ margin: '0 0 5px 0' }}>{post.title}</h3>
+                  <p style={{ margin: 0, fontSize: '14px', color: '#666' }}>{post.category} • {post.published ? 'Diterbitkan' : 'Draf'}</p>
+                </div>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button style={{ ...style.button, backgroundColor: '#f0f0f0' }} onClick={() => editPost(post)}>Edit</button>
+                  <button style={{ ...style.button, backgroundColor: '#ffebee', color: '#c62828' }} onClick={() => deletePost(post.id)}>Hapus</button>
+                </div>
               </div>
-            ) : (
-              <p className="empty-state-inline">Belum ada postingan. Tulis ceritamu yang pertama di atas.</p>
-            )}
+            ))}
           </section>
         </div>
       </div>
-
-      <footer className="footer">© {new Date().getFullYear()} • Dashboard</footer>
+      <footer style={{ padding: '40px 0', textAlign: 'center', color: '#888', fontSize: '14px' }}>
+        © {new Date().getFullYear()} Dashboard Profesional
+      </footer>
     </main>
   );
 }

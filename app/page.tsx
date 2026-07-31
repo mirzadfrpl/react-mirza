@@ -5,11 +5,12 @@ import { verifyToken } from '@/lib/auth';
 import FeedCard from './components/FeedCard';
 import Sidebar from './components/Sidebar';
 
-type Comment = {
+// Tipe Data
+type Reposter = {
   id: number;
-  content: string;
-  createdAt: Date;
-  user: { name: string };
+  name: string;
+  username: string;
+  photoUrl: string;
 };
 
 type PostWithCounts = {
@@ -20,135 +21,101 @@ type PostWithCounts = {
   coverImage: string;
   category: string;
   createdAt: Date;
-  author: {
-    name: string;
-    username: string;
-    headline: string;
-    photoUrl: string;
-  };
-  comments: Comment[];
-  _count: {
-    likes: number;
-    comments: number;
-    reposts: number;
-  };
-  likedByMe?: boolean; // Tanda tanya (?) ditambahkan agar opsional saat query dari Prisma
-};
-
-type CurrentUser = {
-  id: number;
-  username: string;
-  name: string;
-  headline: string;
-  photoUrl: string;
-  followers: { followerId: number }[];
-  following: { followingId: number }[];
+  author: { id: number; name: string; username: string; headline: string; photoUrl: string; };
+  comments: any[];
+  _count: { likes: number; comments: number; reposts: number; };
+  likedByMe?: boolean;
+  repostedByMe?: boolean;
+  reposters: Reposter[]; // Dibuat menjadi Array
 };
 
 export default async function HomePage() {
   const token = cookies().get('token')?.value;
   const payload = verifyToken(token);
   
-  const currentUser = payload
-    ? await prisma.user.findUnique({
-        where: { id: payload.userId },
-        include: {
-          followers: { select: { followerId: true } },
-          following: { select: { followingId: true } },
-        },
-      })
-    : null;
+  const currentUser = payload ? await prisma.user.findUnique({
+    where: { id: payload.userId },
+    include: { followers: { select: { followerId: true } }, following: { select: { followingId: true } } }
+  }) : null;
     
-  // Ditambahkan tipe secara eksplisit pada item agar tidak terkena error 'any'
-  const followingIds = currentUser?.following.map((item: { followingId: number }) => item.followingId) ?? [];
-  const onlyFollowed = currentUser && followingIds.length > 0;
+  const followingIds = currentUser?.following.map((i: any) => i.followingId) ?? [];
+  const isLoggedIn = Boolean(currentUser);
   
-  const posts = await prisma.post.findMany({
-    where: onlyFollowed
-      ? { published: true, authorId: { in: followingIds } }
-      : { published: true },
+  // 1. Ambil Postingan
+  const rawPosts = await prisma.post.findMany({
+    where: { published: true },
     orderBy: { createdAt: 'desc' },
     include: {
       author: true,
-      comments: { include: { user: true }, orderBy: { createdAt: 'desc' }, take: 3 },
+      comments: { include: { user: true }, orderBy: { createdAt: 'desc' } },
       _count: { select: { likes: true, comments: true, reposts: true } },
-      ...(currentUser ? { likes: { where: { userId: currentUser.id }, select: { id: true } } } : {}),
+      ...(currentUser ? { 
+        likes: { where: { userId: currentUser.id }, select: { id: true } },
+        reposts: { where: { userId: currentUser.id }, select: { id: true } }
+      } : {}),
     },
-    take: 10,
-  }) as Array<PostWithCounts & { likes?: { id: number }[] }>;
-  
-  const feedLabel = onlyFollowed
-    ? 'Postingan dari akun yang kamu ikuti'
-    : 'Postingan profesional terbaru';
-  const feedSubtitle = onlyFollowed
-    ? 'Menampilkan update dari akun yang Anda follow.'
-    : 'Follow akun untuk mempersonalisasi FYP Anda.';
-    
+    take: 30,
+  });
+
+  // 2. Ambil Semua Repost untuk dikelompokkan
+  const rawReposts = await prisma.repost.findMany({
+    where: { post: { published: true } },
+    include: { user: true }
+  });
+
+  // 3. Grouping: Masukkan reposter ke dalam Map berdasarkan postId
+  const repostMap = new Map<number, Reposter[]>();
+  rawReposts.forEach((r) => {
+    if (!repostMap.has(r.postId)) repostMap.set(r.postId, []);
+    repostMap.get(r.postId)!.push(r.user);
+  });
+
+  // 4. Transform data: Gabungkan reposter ke dalam postingan
+  const finalPosts = rawPosts.map((post) => ({
+    ...post,
+    reposters: repostMap.get(post.id) || [],
+    likedByMe: Boolean(post.likes?.length),
+    repostedByMe: Boolean(post.reposts?.length),
+  }));
+
+  // Sortir: Utamakan postingan yang di-follow
+  finalPosts.sort((a, b) => {
+    const aIsFollowed = isLoggedIn ? followingIds.includes(a.author.id) : false;
+    const bIsFollowed = isLoggedIn ? followingIds.includes(b.author.id) : false;
+    if (aIsFollowed && !bIsFollowed) return -1;
+    if (!aIsFollowed && bIsFollowed) return 1;
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
+
   return (
     <main className="page layout-shell">
       <aside className="left-sidebar">
         {currentUser ? (
           <>
             <div className="sidebar-profile-card">
-              <div className="profile-avatar">
-                <img src={currentUser.photoUrl} alt={currentUser.name} />
-              </div>
-              <div>
-                <p className="eyebrow">Selamat datang</p>
-                <h2>{currentUser.name}</h2>
-                <p className="sidebar-subtitle">@{currentUser.username}</p>
-                <p className="sidebar-note">{currentUser.headline}</p>
-                <div className="follow-summary">
-                  <span>{currentUser.followers.length} pengikut</span>
-                  <span>{currentUser.following.length} mengikuti</span>
-                </div>
-                <Link className="button tertiary small" href={`/linkidn/${currentUser.username}`}>
-                  Lihat profil
-                </Link>
-              </div>
+              <div className="profile-avatar"><img src={currentUser.photoUrl} alt={currentUser.name} /></div>
+              <h2>{currentUser.name}</h2>
+              <p>@{currentUser.username}</p>
+              <Link className="button tertiary small" href={`/linkidn/${currentUser.username}`}>Lihat profil</Link>
             </div>
             <nav className="sidebar-nav">
               <Link className="nav-item active" href="/">Home</Link>
               <Link className="nav-item" href="/explore">Explore</Link>
-              <Link className="nav-item" href="/edit">Dashboard Admin</Link>
             </nav>
           </>
         ) : (
-          <>
-            <div className="branding-card">
-              <p className="eyebrow">ProFeed</p>
-              <h2>Jaringan profesional yang lebih ramai.</h2>
-              <p>Posting, komentar, dan repost dengan pengalaman seperti social media profesional.</p>
-            </div>
-            <nav className="sidebar-nav">
-              <Link className="nav-item active" href="/">Home</Link>
-              <Link className="nav-item" href="/explore">Explore</Link>
-            </nav>
-            <div className="sidebar-actions sidebar-left-actions">
-              <Link className="button" href="/login">Masuk</Link>
-              <Link className="button secondary" href="/register">Daftar</Link>
-            </div>
-          </>
+          <div className="branding-card"><h2>ProFeed</h2><p>Jaringan profesional.</p></div>
         )}
       </aside>
+
       <section className="main-column">
         <header className="main-header">
-          <div>
-            <p className="eyebrow">Home</p>
-            <h1>{feedLabel}</h1>
-            <p className="lead smaller">{feedSubtitle}</p>
-          </div>
-          <Link className="button tertiary" href="/explore">Cari akun & hashtag</Link>
+          <h1>Untuk Anda</h1>
         </header>
+        
         <div className="feed-list">
-          {posts.map((post: PostWithCounts & { likes?: { id: number }[] }) => (
-            <FeedCard
-              key={post.id}
-              post={{
-                ...post,
-                likedByMe: Boolean(post.likes?.length),
-              }}
-            />
+          {finalPosts.map((post) => (
+            <FeedCard key={post.id} post={post} />
           ))}
         </div>
       </section>

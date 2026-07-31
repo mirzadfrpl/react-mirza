@@ -8,16 +8,16 @@ datasource db {
 }
 
 model User {
-  id           Int       @id @default(autoincrement())
-  username     String    @unique
-  email        String?   @unique
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
+  email        String?  @unique
   passwordHash String
   name         String
   headline     String
-  bio          String    @default("Profil profesional baru.")
-  linkedin     String    @default("https://linkedin.com")
-  photoUrl     String    @default("https://images.unsplash.com/photo-1544723795-3fb6469f5b39?auto=format&fit=crop&w=800&q=80")
-  createdAt    DateTime  @default(now())
+  bio          String   @default("Profil profesional baru.")
+  linkedin     String   @default("https://linkedin.com")
+  photoUrl     String   @default("https://images.unsplash.com/photo-1544723795-3fb6469f5b39?auto=format&fit=crop&w=800&q=80")
+  createdAt    DateTime @default(now())
 
   // Relasi
   posts        Post[]
@@ -41,18 +41,18 @@ model Follow {
 }
 
 model Post {
-  id         Int       @id @default(autoincrement())
+  id         Int      @id @default(autoincrement())
   title      String
-  slug       String    @unique
+  slug       String   @unique
   excerpt    String
   content    String
   coverImage String
-  category   String    @default("article")
-  published  Boolean   @default(true)
-  createdAt  DateTime  @default(now())
+  category   String   @default("article")
+  published  Boolean  @default(true)
+  createdAt  DateTime @default(now())
 
   authorId   Int
-  author     User      @relation(fields: [authorId], references: [id])
+  author     User     @relation(fields: [authorId], references: [id])
 
   comments   Comment[]
   likes      Like[]
@@ -73,6 +73,8 @@ model Comment {
 
 model Like {
   id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) // 1. Ditambahkan kolom createdAt
+
   userId    Int
   user      User     @relation(fields: [userId], references: [id])
   
@@ -84,6 +86,8 @@ model Like {
 
 model Repost {
   id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) // 2. Ditambahkan kolom createdAt agar bisa di-orderBy
+
   userId    Int
   user      User     @relation(fields: [userId], references: [id])
   

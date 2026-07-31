@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { revalidatePath } from 'next/cache';
 
 type TokenData = { userId: number } | null;
 
@@ -61,6 +62,10 @@ export async function POST(request: Request) {
     }
 
     const count = await prisma.like.count({ where: { postId } });
+    
+    // Hapus cache menyeluruh
+    revalidatePath('/', 'layout');
+    
     return NextResponse.json({ action, count, liked });
   }
 
@@ -74,17 +79,35 @@ export async function POST(request: Request) {
       },
     });
 
-    if (!existing) {
+    let reposted = false;
+    
+    // Logika Toggle: Hapus jika sudah ada, Buat jika belum ada
+    if (existing) {
+      await prisma.repost.delete({
+        where: {
+          postId_userId: {
+            postId,
+            userId: token.userId,
+          },
+        },
+      });
+    } else {
       await prisma.repost.create({
         data: {
           postId,
           userId: token.userId,
         },
       });
+      reposted = true;
     }
 
     const count = await prisma.repost.count({ where: { postId } });
-    return NextResponse.json({ action, count });
+    
+    // Hapus cache menyeluruh
+    revalidatePath('/', 'layout');
+    
+    // Mengembalikan status reposted untuk update UI di client
+    return NextResponse.json({ action, count, reposted });
   }
 
   if (action === 'comment') {
@@ -105,6 +128,10 @@ export async function POST(request: Request) {
     });
 
     const count = await prisma.comment.count({ where: { postId } });
+    
+    // Hapus cache menyeluruh
+    revalidatePath('/', 'layout');
+    
     return NextResponse.json({ action, count, comment });
   }
 
